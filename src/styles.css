@@ -1,0 +1,167 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system — "Soft frosted ledger".
+ * Paper-blue field, frosted white panels, deep-green accent,
+ * Inter for text, JetBrains Mono for figures, Newsreader italic for advisory.
+ * All colors are oklch tokens; never hardcode colors in components.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-serif: "Newsreader", ui-serif, Georgia, serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+
+  --color-ink: var(--ink);
+  --color-line: var(--line);
+  --color-warn: var(--warn);
+  --color-good: var(--good);
+  --color-paper: var(--background);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.933 0.008 262);
+  --foreground: oklch(0.216 0.011 268);
+  --ink: oklch(0.216 0.011 268);
+  --line: oklch(0.925 0.008 262);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.216 0.011 268);
+  --popover: oklch(0.99 0.002 262);
+  --popover-foreground: oklch(0.216 0.011 268);
+  --primary: oklch(0.216 0.011 268);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.955 0.006 262);
+  --secondary-foreground: oklch(0.216 0.011 268);
+  --muted: oklch(0.955 0.006 262);
+  --muted-foreground: oklch(0.551 0.023 264);
+  --accent: oklch(0.454 0.056 155);
+  --accent-foreground: oklch(1 0 0);
+  --good: oklch(0.51 0.07 154);
+  --warn: oklch(0.503 0.128 52);
+  --destructive: oklch(0.55 0.19 25);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.925 0.008 262);
+  --input: oklch(0.925 0.008 262);
+  --ring: oklch(0.454 0.056 155);
+  --chart-1: oklch(0.454 0.056 155);
+  --chart-2: oklch(0.503 0.128 52);
+  --chart-3: oklch(0.216 0.011 268);
+  --chart-4: oklch(0.551 0.023 264);
+  --chart-5: oklch(0.51 0.07 154);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Frosted panel — the core surface of the design system. */
+@utility panel {
+  border-radius: var(--radius-2xl);
+  background-color: color-mix(in oklch, var(--card) 55%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--ink) 6%, transparent);
+}
+
+@utility panel-solid {
+  border-radius: var(--radius-2xl);
+  background-color: color-mix(in oklch, var(--card) 78%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--ink) 6%, transparent);
+}
+
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted-foreground);
+}
+
+/* Category names — same mono/uppercase/letter-spaced treatment as label-mono,
+   sized and weighted to read as a primary list label. */
+@utility cat-name {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+@utility track {
+  overflow: hidden;
+  border-radius: 999px;
+  background-color: color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+@keyframes grow {
+  from {
+    width: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility rise {
+  animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@utility bar-grow {
+  animation: grow 1s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}

@@ -1,0 +1,17 @@
+# Netlify build config for the Nest budget app.
+# The app is a TanStack Start app; Nitro is configured to use the "netlify"
+# preset (see vite.config.ts), which outputs the SSR server to
+# .netlify/functions-internal and static assets to dist/.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# These are publishable (anon) values, safe for the client build.
+# Set the real values in Netlify → Site settings → Environment variables.
+#   VITE_SUPABASE_URL
+#   VITE_SUPABASE_PUBLISHABLE_KEY
+#   VITE_SUPABASE_PROJECT_ID
