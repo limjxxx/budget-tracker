@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,6 +19,11 @@ import {
   useSeedStarterCategories,
   useSetBudget,
   useUpdateCategory,
+  useRecurringItems,
+  useAddRecurring,
+  useToggleRecurring,
+  useDeleteRecurring,
+  useRunDueRecurring,
   sortByUsage,
   type CategoryMonth,
 } from "@/lib/budget-data";
@@ -38,6 +43,7 @@ import { ComparePanel } from "@/components/budget/ComparePanel";
 import { AdvisoryPanel } from "@/components/budget/AdvisoryPanel";
 import { ExpenseSheet } from "@/components/budget/ExpenseSheet";
 import { CategoriesSheet } from "@/components/budget/CategoriesSheet";
+import { RecurringSheet } from "@/components/budget/RecurringSheet";
 import { TabBar } from "@/components/budget/TabBar";
 import { DailyLog } from "@/components/budget/DailyLog";
 
@@ -84,6 +90,26 @@ function Budget() {
   const deleteCategory = useDeleteCategory();
   const seedCategories = useSeedStarterCategories();
   const copyBudgets = useCopyBudgetsFromPreviousMonth();
+
+  const recurring = useRecurringItems();
+  const addRecurring = useAddRecurring();
+  const toggleRecurring = useToggleRecurring();
+  const deleteRecurring = useDeleteRecurring();
+  const runDueRecurring = useRunDueRecurring();
+
+  // Adds any repeating payments that are already due, once per visit.
+  const ranRecurring = useRef(false);
+  const runDue = runDueRecurring.mutate;
+  useEffect(() => {
+    if (ranRecurring.current) return;
+    if (!recurring.data?.length) return;
+    ranRecurring.current = true;
+    runDue(undefined, {
+      onSuccess: (added) => {
+        if (added) toast.success(`${added} repeating payment${added > 1 ? "s" : ""} added`);
+      },
+    });
+  }, [recurring.data, runDue]);
 
   const busy =
     setBudget.isPending ||
@@ -213,6 +239,25 @@ function Budget() {
               onRename={(input) => updateCategory.mutate(input)}
               onDelete={(id) => deleteCategory.mutate(id)}
             />
+            {hasCategories ? (
+              <RecurringSheet
+                categories={sortedCategories}
+                items={recurring.data ?? []}
+                busy={busy || addRecurring.isPending}
+                onAdd={(input) =>
+                  addRecurring.mutate(input, {
+                    onSuccess: () => {
+                      toast.success("Repeating payment saved");
+                      runDueRecurring.mutate(undefined);
+                    },
+                    onError: (e) =>
+                      toast.error(e instanceof Error ? e.message : "Couldn't save that"),
+                  })
+                }
+                onToggle={(input) => toggleRecurring.mutate(input)}
+                onDelete={(id) => deleteRecurring.mutate(id)}
+              />
+            ) : null}
             <button
               type="button"
               onClick={() => setExpenseOpen(true)}
