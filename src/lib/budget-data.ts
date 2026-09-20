@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { addMonths, currentMonthKey, monthKeyOfDateString, type MonthKey } from "@/lib/month";
+import {
+  addMonths,
+  currentMonthKey,
+  monthKeyOfDateString,
+  todayDateString,
+  type MonthKey,
+} from "@/lib/month";
 
 export type Category = {
   id: string;
@@ -24,7 +30,25 @@ export type Expense = {
   amount: number;
   spent_on: string;
   note: string | null;
+  recurring_item_id?: string | null;
 };
+
+export type RecurringFrequency = "monthly" | "yearly";
+
+export type RecurringItem = {
+  id: string;
+  category_id: string;
+  name: string;
+  amount: number;
+  frequency: RecurringFrequency;
+  day_of_month: number;
+  active: boolean;
+};
+
+/** What a repeating payment costs in a single month. */
+export function monthlyCost(item: { amount: number; frequency: RecurringFrequency }) {
+  return item.frequency === "yearly" ? Math.round((item.amount / 12) * 100) / 100 : item.amount;
+}
 
 export const STARTER_CATEGORIES = [
   { name: "Food", note: "meals out" },
@@ -82,7 +106,7 @@ export function useExpenses() {
       const from = addMonths(currentMonthKey(), -HISTORY_MONTHS);
       const { data, error } = await supabase
         .from("expenses")
-        .select("id, category_id, amount, spent_on, note")
+        .select("id, category_id, amount, spent_on, note, recurring_item_id")
         .gte("spent_on", from)
         .order("spent_on", { ascending: false });
       if (error) throw error;
@@ -238,6 +262,160 @@ export function useDeleteExpense() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+  });
+}
+
+/* ---------- Repeating payments ---------- */
+
+export function useRecurringItems() {
+  return useQuery({
+    queryKey: ["recurring"],
+    queryFn: async (): Promise<RecurringItem[]> => {
+      const { data, error } = await supabase
+        .from("recurring_items")
+        .select("id, category_id, name, amount, frequency, day_of_month, active")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        ...r,
+        amount: Number(r.amount),
+        frequency: r.frequency as RecurringFrequency,
+      }));
+    },
+  });
+}
+
+function useInvalidateRecurring() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidate();
+  return () => {
+    qc.invalidateQueries({ queryKey: ["recurring"] });
+    invalidate();
+  };
+}
+
+export function useAddRecurring() {
+  const invalidate = useInvalidateRecurring();
+  return useMutation({
+    mutationFn: async (input: {
+      categoryId: string;
+      name: string;
+      amount: number;
+      frequency: RecurringFrequency;
+      dayOfMonth: number;
+    }) => {
+      const user_id = await userId();
+      const { error } = await supabase.from("recurring_items").insert({
+        user_id,
+        category_id: input.categoryId,
+        name: input.name.trim(),
+        amount: input.amount,
+        frequency: input.frequency,
+        day_of_month: input.dayOfMonth,
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useToggleRecurring() {
+  const invalidate = useInvalidateRecurring();
+  return useMutation({
+    mutationFn: async (input: { id: string; active: boolean }) => {
+      const { error } = await supabase
+        .from("recurring_items")
+        .update({ active: input.active })
+        .eq("id", input.id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteRecurring() {
+  const invalidate = useInvalidateRecurring();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("recurring_items").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Adds any repeating payments that are already due and not recorded yet.
+ * Looks back three months so a gap after being away still fills in.
+ */
+export function useRunDueRecurring() {
+  const invalidate = useInvalidateRecurring();
+  return useMutation({
+    mutationFn: async (): Promise<number> => {
+      const user_id = await userId();
+      const { data: items, error } = await supabase
+        .from("recurring_items")
+        .select("id, category_id, name, amount, frequency, day_of_month, created_at")
+        .eq("active", true);
+      if (error) throw error;
+      if (!items?.length) return 0;
+
+      const window = [
+        addMonths(currentMonthKey(), -2),
+        addMonths(currentMonthKey(), -1),
+        currentMonthKey(),
+      ];
+
+      const { data: existing, error: readError } = await supabase
+        .from("expenses")
+        .select("recurring_item_id, spent_on")
+        .not("recurring_item_id", "is", null)
+        .gte("spent_on", window[0]!);
+      if (readError) throw readError;
+
+      const seen = new Set(
+        (existing ?? []).map((e) => `${e.recurring_item_id}:${monthKeyOfDateString(e.spent_on)}`),
+      );
+
+      const today = todayDateString();
+      const rows: {
+        user_id: string;
+        category_id: string;
+        amount: number;
+        spent_on: string;
+        note: string;
+        recurring_item_id: string;
+      }[] = [];
+
+      for (const item of items) {
+        const startMonth = monthKeyOfDateString(String(item.created_at).slice(0, 10));
+        for (const month of window) {
+          if (month < startMonth) continue;
+          if (seen.has(`${item.id}:${month}`)) continue;
+          const due = `${month.slice(0, 8)}${String(item.day_of_month).padStart(2, "0")}`;
+          if (due > today) continue;
+          rows.push({
+            user_id,
+            category_id: item.category_id,
+            amount: monthlyCost({
+              amount: Number(item.amount),
+              frequency: item.frequency as RecurringFrequency,
+            }),
+            spent_on: due,
+            note: item.name,
+            recurring_item_id: item.id,
+          });
+        }
+      }
+
+      if (!rows.length) return 0;
+      const { error: insertError } = await supabase.from("expenses").insert(rows);
+      if (insertError) throw insertError;
+      return rows.length;
+    },
+    onSuccess: (added) => {
+      if (added) invalidate();
+    },
   });
 }
 
